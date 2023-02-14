@@ -1,0 +1,135 @@
+---
+title: "Kaggle Competition"
+output: html_document
+date: '2022-07-31'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Loading Libraries and Files
+library(dplyr)
+library(stringr)
+library(stats)
+library(car)
+
+cars_train <- read.csv("SummercarsTrain.csv")
+cars_test <- read.csv("SummercarsTestNoY.csv")
+```
+
+```{r fig.height = 8}
+# Correlation Plots of Numerical Variables
+cars_train_num <- select_if(cars_train, is.numeric)
+cor_mat <- cor(cars_train_num)
+cor_mat <- round(cor_mat, 3)
+corrplot(cor_mat)
+corrplot(cor_mat, method = "number", number.cex = 1.5, mar=c(0,0,2,0), main = "Correlation Plot of all Numerical Predictors in Training Data Set")
+```
+```{r}
+# VIF of Numerical Variables
+m_top5 <- lm(PriceNew ~ Horsepower + Weight + Fuel.tank.capacity + EngineSize + Wheelbase, data = cars_train)
+vif(m_top5)
+```
+
+```{r}
+# VIF of only top 2
+m_top2 <- lm(PriceNew ~ Horsepower + Weight, data = cars_train)
+vif(m_top5)
+```
+
+```{r}
+#Linear model of all variables
+all_model <- lm(PriceNew ~ ., data = cars_train)
+summary(all_model)
+```
+
+```{r}
+#Stepwise regression shows only make is significant
+all_step <- step(all_model)
+summary(all_step)
+```
+
+```{r}
+# Creating a new variable from Make
+new_data <- cars_train %>%
+  arrange(PriceNew) %>%
+  group_by(Make) %>%
+  mutate(average = mean(PriceNew)) %>%
+  arrange(average)
+summary(new_data$average)
+
+makelev <- function(x){
+  if(x <= 13621){1}
+  if(x > 13621 && x <= 19768){2}
+  if(x > 19768 && x <= 218212){3}
+  if(x > 21821 && x <= 27998){4}
+  if(x > 27998){5}
+}
+
+head(new_data, 500)
+
+new_data <- new_data %>%
+  ungroup() %>%
+  mutate(level1 = ifelse(Make %in% unique(new_data$Make[1:391]), 1, 0)) %>%
+  mutate(level2 = ifelse(Make %in% unique(new_data$Make[392:772]), 1, 0)) %>%
+  mutate(level3 = ifelse(Make %in% unique(new_data$Make[773:992]), 1, 0)) %>%
+  mutate(level4 = ifelse(Make %in% unique(new_data$Make[993:1134]), 1, 0)) %>%
+  mutate(level5 = ifelse(Make %in% unique(new_data$Make[1135:1204]), 1, 0)) %>%
+  mutate(level6 = ifelse(Make %in% unique(new_data$Make[1205:1434]), 1, 0)) %>%
+  mutate(level7 = ifelse(Make %in% unique(new_data$Make[1435:1479]), 1, 0)) %>%
+  mutate(level8 = ifelse(Make %in% unique(new_data$Make[1480:1500]), 1, 0)) %>%
+  arrange(average)
+
+tail(new_data, 500)
+
+```
+
+```{r}
+#Model with Type
+model_type <- lm(PriceNew ~ Horsepower + Weight + level1 + level2 + level3 + level4 + level5 + level6 + level7 + level8 + AirBags + Type, data = new_data)
+summary(model_new)
+```
+
+```{r}
+#Final Linear Model without Type
+model_type <- lm(PriceNew ~ Horsepower + Weight + level1 + level2 + level3 + level4 + level5 + level6 + level7 + level8 + AirBags, data = new_data)
+summary(model_new)
+```
+
+```{r}
+#BIC Score of Final Model
+extractAIC(step_model,k = log(11))
+```
+
+```{r}
+#Diagnostics of new model
+vif(step_model)
+autoplot(step_model)
+```
+
+```{r}
+#Changing the testing data to have level1 through level8 variables
+new_data_test <- cars_test %>%
+  mutate(level1 = ifelse(Make %in% unique(new_data$Make[1:391]), 1, 0)) %>%
+  mutate(level2 = ifelse(Make %in% unique(new_data$Make[392:772]), 1, 0)) %>%
+  mutate(level3 = ifelse(Make %in% unique(new_data$Make[773:992]), 1, 0)) %>%
+  mutate(level4 = ifelse(Make %in% unique(new_data$Make[993:1134]), 1, 0)) %>%
+  mutate(level5 = ifelse(Make %in% unique(new_data$Make[1135:1204]), 1, 0)) %>%
+  mutate(level6 = ifelse(Make %in% unique(new_data$Make[1205:1434]), 1, 0)) %>%
+  mutate(level7 = ifelse(Make %in% unique(new_data$Make[1435:1479]), 1, 0)) %>%
+  mutate(level8 = ifelse(Make %in% unique(new_data$Make[1480:1500]), 1, 0))
+```
+
+```{r}
+#Creating Predictions and writing to file
+y_hat_comb <- predict(step_model, newdata = new_data_test)
+write.csv(y_hat_comb,"final_attempt.csv")
+```
+
+```{r}
+#Writing updated data set to a new file
+write.csv(new_data, "505400335_stats101a_updated data file.csv")
+```
+
